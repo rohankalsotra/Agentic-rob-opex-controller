@@ -123,11 +123,18 @@ async def draft_narrative(package, model_call=call_claude, max_attempts=MAX_ATTE
             "attempts": attempts, "cost": total_cost}
 
 
+async def make_preread(package, model_call=call_claude, path=preread.PREREAD_PATH):
+    """Draft the AI parts, check them, assemble the pre-read and save it. Returns the drafting result.
+    (The Orchestrator uses this; so does run() below.)"""
+    result = await draft_narrative(package, model_call)
+    text = preread.render_preread(package, result["headline"], result["discussion_points"])
+    Path(path).write_text(text, encoding="utf-8")
+    return result
+
+
 async def run(model=MODEL):
     package = json.loads(preread.HANDOFF_PATH.read_text(encoding="utf-8"))
-    result = await draft_narrative(package, lambda prompt: call_claude(prompt, model))
-    text = preread.render_preread(package, result["headline"], result["discussion_points"])
-    preread.PREREAD_PATH.write_text(text, encoding="utf-8")
+    result = await make_preread(package, lambda prompt: call_claude(prompt, model))
 
     print("\n----- AI-DRAFTED PARTS -----")
     if result["accepted"]:

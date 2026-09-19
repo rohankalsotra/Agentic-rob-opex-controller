@@ -86,6 +86,21 @@ def test_a_failed_draft_leaves_placeholders_in_the_pre_read(package):
     assert preread.HEADLINE_PLACEHOLDER in text and preread.DISCUSSION_PLACEHOLDER in text
 
 
+def test_make_preread_writes_the_file_with_the_accepted_draft(package, tmp_path):
+    target = tmp_path / "preread.md"
+    fake = fake_claude(GOOD_REPLY)
+    result = asyncio.run(ca.make_preread(package, fake, target))
+    text = target.read_text(encoding="utf-8")
+    assert result["accepted"] and GOOD_HEADLINE in text and "## Headline (AI-drafted)" in text
+
+
+def test_make_preread_writes_placeholders_when_the_draft_keeps_failing(package, tmp_path):
+    import preread
+    target = tmp_path / "preread.md"
+    asyncio.run(ca.make_preread(package, fake_claude(BAD_REPLY, BAD_REPLY), target))
+    assert preread.HEADLINE_PLACEHOLDER in target.read_text(encoding="utf-8")
+
+
 # ---- the guardrails --------------------------------------------------------------------------
 def test_claude_is_locked_inside_its_box():
     options = ca.build_options()

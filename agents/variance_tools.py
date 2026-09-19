@@ -58,6 +58,9 @@ def build_report_card(report, period="quarter", data_quality_card=None):
     team_cards = [{"cost_center": r["Cost Center"], **_card(r)} for _, r in teams.iterrows()]
 
     flagged = p["by_line"][p["by_line"]["Status"].isin(["OVER", "UNDER"])]
+    # Biggest dollar swing first. Ranking needs real numbers, so it happens HERE, on the calculator
+    # side; everything downstream (pre-read, agenda) simply keeps this order and never calculates.
+    flagged = flagged.sort_values("Variance $", key=abs, ascending=False, kind="stable")
     flagged_cards = [{"cost_center": r["Cost Center"], "category": r["Category"], **_card(r)}
                      for _, r in flagged.iterrows()]
 

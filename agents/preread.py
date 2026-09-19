@@ -36,13 +36,13 @@ def _table(card, exact=False):
     return "\n".join(lines)
 
 
-def _who(item):
+def who(item):
     """How a data-quality item is named: its Transaction ID (if it has one) and where it sits."""
     ident = item["transaction_id"] or "Row with no Transaction ID"
     return f"{ident} ({item['cost_center']}, {item['category']}, {item['month']})"
 
 
-def _empty_months(package):
+def empty_months(package):
     """Budgeted months with no transactions, from both periods, each listed once."""
     seen, out = set(), []
     for card in (package["quarter"], package["year_to_date"]):
@@ -84,20 +84,21 @@ def _data_quality(package):
         verdict = "passed" if c["passed"] else "FAILED. Do not rely on these figures"
         lines.append(f"- **Control total ({label}): {verdict}.** Transactions "
                      f"{c['transactions_total']['short']}, report {c['report_total']['short']}.")
-    lines += [f"- **Open, needs a human:** {_who(i)}: {i['what_was_found']}" for i in dq["open_needs_a_human"]]
-    lines += [f"- **Reviewer decision:** {_who(i)}: {i['what_was_decided']}" for i in dq["resolved_by_a_reviewer"]]
-    lines += [f"- **Handled automatically:** {_who(i)}: {i['what_was_decided']}" for i in dq["resolved_automatically"]]
+    lines += [f"- **Open, needs a human:** {who(i)}: {i['what_was_found']}" for i in dq["open_needs_a_human"]]
+    lines += [f"- **Reviewer decision:** {who(i)}: {i['what_was_decided']}" for i in dq["resolved_by_a_reviewer"]]
+    lines += [f"- **Handled automatically:** {who(i)}: {i['what_was_decided']}" for i in dq["resolved_automatically"]]
     deciders = sorted({d["decided_by"] for d in dq["reviewer_decisions_applied"]})
     if deciders:
         lines.append(f"- Reviewer decisions were made by {', '.join(deciders)}.")
-    for e in _empty_months(package):
+    for e in empty_months(package):
         lines.append(f"- **No transactions recorded:** {e['cost_center']} / {e['category']}, {e['month']} "
                      f"(budget {e['budget']['short']}). {e['note']}")
     return "\n".join(lines)
 
 
-def _follow_ups(package):
-    """Suggested follow-ups, generated from the flags and the open items. Never names an owner or a date."""
+def follow_up_items(package):
+    """Suggested follow-ups as a list of sentences, generated from the flags and the open items.
+    Never names an owner or a date."""
     q, y = package["quarter"], package["year_to_date"]
     items, seen = [], set()
     for suffix, card in (("", q), (" (year to date)", y)):
@@ -106,11 +107,16 @@ def _follow_ups(package):
                 seen.add((f["cost_center"], f["category"]))
                 items.append(f"Review what is behind {f['cost_center']} / {f['category']} "
                              f"({f['status']}, {f['variance']['short']}, {f['variance_pct']}){suffix}.")
-    for e in _empty_months(package):
+    for e in empty_months(package):
         items.append(f"Confirm whether {e['cost_center']} / {e['category']} spending for {e['month']} "
                      f"is missing from the ledger (budget {e['budget']['short']}).")
     for i in package["data_quality"]["open_needs_a_human"]:
-        items.append(f"Resolve the open data issue on {_who(i)}: {i['what_was_found']}")
+        items.append(f"Resolve the open data issue on {who(i)}: {i['what_was_found']}")
+    return items
+
+
+def _follow_ups(package):
+    items = follow_up_items(package)
     if not items:
         return "No follow-ups are generated from this report."
     return "\n".join(f"- [ ] {text}  \n  Owner: to be assigned · Due: to be assigned" for text in items)

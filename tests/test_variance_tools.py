@@ -188,3 +188,14 @@ def test_cost_centers_are_always_given_by_name_never_as_a_bare_id(sample):
         card = vt.build_report_card(sample[0], period)
         assert not any(k.endswith("_id") for k in keys_of(card))
         assert "CC-" not in json.dumps(card)
+
+
+@needs_sample
+def test_flagged_lines_are_ranked_by_size_of_the_dollar_variance(sample):
+    """Biggest swing first, whether over or under. The agenda relies on this order."""
+    card = vt.build_report_card(sample[0], "quarter")
+    order = [(f["cost_center"], f["category"]) for f in card["flagged_lines"]]
+    assert order == [("Field Sales", "Contractors"),                  # +$61.7K
+                     ("Engineering Ops", "Software & Subscriptions"),  # -$32.3K
+                     ("Marketing", "Travel"),                          # +$20.3K
+                     ("Marketing", "Events & Marketing")]              # -$11.5K

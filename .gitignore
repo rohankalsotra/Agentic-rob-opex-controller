@@ -17,3 +17,7 @@ data/*.csv
 # ...but our invented (synthetic) sample files are safe to share
 !data/sample_*.xlsx
 !data/sample_*.csv
+
+# generated files (may contain real data): keep out of git
+outputs/*
+!outputs/.gitkeep

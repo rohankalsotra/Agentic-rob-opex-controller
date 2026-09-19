@@ -22,9 +22,12 @@ import re
 ID = re.compile(r"\b(?:TXN|PO|CC)-\d+\b")
 QUARTER = re.compile(r"\bQ[1-4]\b")                       # "Q3" is a label, not a quantity
 LIST_MARKER = re.compile(r"(?m)^\s*\d+[.)]\s")            # "1. first item" numbering in a list
-MONEY = re.compile(r"[+-]?\$\d[\d,]*(?:\.\d+)?[KMB]?")
-PERCENT = re.compile(r"[+-]?\d+(?:\.\d+)?%")
-PLAIN = re.compile(r"(?<![\w$.,+-])\d[\d,]*(?:\.\d+)?(?![\w%])")
+# A comma is part of a number ONLY when three digits follow it ("2,500"). A comma after a number
+# ("$2,500, and ..." or a JSON list "3,") is just punctuation. (A bug found while testing the pre-read.)
+DIGITS = r"\d+(?:,\d{3})*(?:\.\d+)?"
+MONEY = re.compile(rf"[+-]?\${DIGITS}[KMB]?")
+PERCENT = re.compile(rf"[+-]?{DIGITS}%")
+PLAIN = re.compile(rf"(?<![\w$.,+-]){DIGITS}(?![\w%])")
 
 
 def extract(text):

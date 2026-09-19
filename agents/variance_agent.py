@@ -19,7 +19,6 @@ Try it (from the project folder, with your venv on):
 import asyncio
 import json
 import sys
-from pathlib import Path
 
 from dotenv import load_dotenv
 from claude_agent_sdk import (
@@ -27,14 +26,10 @@ from claude_agent_sdk import (
     AssistantMessage, ResultMessage, TextBlock, ToolUseBlock, ClaudeSDKError,
 )
 
-import variance_engine as engine
-import variance_math as vm
 import variance_tools as vt
 import verifier
+from variance_state import PROJECT_DIR, DATA_DIR, AS_OF, load_state    # the calculator side (no AI)
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_DIR / "data"
-AS_OF = "2026-09-30"                    # the report date: end of Q3 2026
 MODEL = "haiku"                         # cheap model for development; "sonnet" for polished runs
 SERVER_NAME = "variance"                # the name of our tool "bundle"
 TOOL_NAMES = ["get_variance_report", "get_data_quality"]
@@ -77,20 +72,7 @@ changed, and by whom). Call get_data_quality only when the person wants detail a
 STYLE: lead with the headline in one sentence, then a short bullet list of what is flagged. Keep it brief."""
 
 
-# --- STEP 1: load and check the data, the same way the Python demo does ----------------------
-def load_state(data_dir=DATA_DIR, as_of=AS_OF):
-    """Read the workbook, apply the reviewer's decisions, calculate. NO AI involved."""
-    budget, txn, issues = engine.load_workbook(data_dir / "sample_opex_2026.xlsx")
-    decisions = engine.read_decisions(data_dir / "sample_review_decisions.csv")
-    txn, issues, log = engine.apply_decisions(txn, issues, decisions)
-    report = vm.build_variance_report(budget, txn, as_of)
-    names = dict(zip(budget["Cost Center ID"], budget["Cost Center"]))
-    # "tool_outputs" keeps a copy of everything our tools hand to Claude, so the number
-    # checker can compare Claude's answer against exactly that.
-    return {"report": report, "issues": issues, "log": log, "names": names, "tool_outputs": []}
-
-
-# --- STEP 2: the two tools Claude is allowed to call -----------------------------------------
+# --- STEP 1: the two tools Claude is allowed to call -----------------------------------------
 def _text_result(payload, log, is_error=False):
     """Wrap a dictionary as the reply format the SDK expects, and keep a copy in `log`."""
     text = json.dumps(payload, indent=1)
@@ -132,7 +114,7 @@ def make_tools(state):
     return [get_variance_report, get_data_quality]
 
 
-# --- STEP 3: the settings that keep Claude inside its box ------------------------------------
+# --- STEP 2: the settings that keep Claude inside its box ------------------------------------
 def build_options(state, model=MODEL):
     return ClaudeAgentOptions(
         model=model,
@@ -147,7 +129,7 @@ def build_options(state, model=MODEL):
     )
 
 
-# --- STEP 4: ask a question and show what happens ---------------------------------------------
+# --- STEP 3: ask a question and show what happens ---------------------------------------------
 async def ask(question, state=None, model=MODEL):
     state = state or load_state()
     state["tool_outputs"].clear()                  # forget anything from an earlier question

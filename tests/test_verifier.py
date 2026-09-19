@@ -122,3 +122,15 @@ def test_describe_prints_a_clear_verdict(tool_texts):
     ok = vf.describe(check(GOOD_ANSWER, tool_texts))
     bad = vf.describe(check(GOOD_ANSWER.replace("+$61.2K", "+$61.9K"), tool_texts))
     assert ok[0].startswith("PASSED") and bad[0].startswith("FAILED")
+
+
+# ---- punctuation is not part of a number (bug found while building the pre-read) -------------
+def test_a_comma_after_a_number_is_punctuation_not_part_of_it():
+    found = vf.extract("Set to $2,500, then 3, then $1,234,567.")
+    assert found["money"] == ["$2,500", "$1,234,567"]
+    assert found["plain"] == ["3"]
+
+
+def test_a_number_followed_by_a_comma_in_json_can_be_found():
+    tool_output = '{"count": 3, "next": 4}'
+    assert vf.verify_numbers("The other 3 lines net nothing.", [tool_output])["passed"]

@@ -218,7 +218,8 @@ def apply_decisions(txn, issues, decisions):
                 continue
             if action == "remove_no_id_copy":
                 txn = txn[~copies]
-                note = f"Removed {int(copies.sum())} row(s) with no Transaction ID that copied {target}."
+                note = (f"Removed {int(copies.sum())} row(s) with no Transaction ID that copied {target}. "
+                        f"{target} itself was kept.")
             else:
                 note = f"Reviewer confirmed the no-ID row matching {target} is not a duplicate. Kept."
             record(d, "applied", note)

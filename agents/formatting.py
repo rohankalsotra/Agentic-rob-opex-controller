@@ -38,3 +38,15 @@ def format_pct(fraction):
     if fraction is None or pd.isna(fraction):
         return "n/a"
     return f"{fraction * 100:+.1f}%"
+
+
+def format_money_exact(amount, signed=False):
+    """Full dollars with commas, for when someone asks for the exact number.
+    43_612.4 -> '$43,612'   -43_612.4 -> '-$43,612'   (rounded to whole dollars, display only)"""
+    if amount is None or pd.isna(amount):
+        return "n/a"
+    whole = round(float(amount))
+    if whole == 0:                     # same rule as format_money: never show "-$0"
+        return "$0"
+    sign = "-" if whole < 0 else ("+" if signed else "")
+    return f"{sign}${abs(whole):,}"

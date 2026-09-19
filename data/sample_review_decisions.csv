@@ -1,0 +1,3 @@
+Target Transaction ID,Action,New Value,Reason,Decided By,Decided On
+TXN-000121,remove_no_id_copy,,Reviewer decision: the row with no Transaction ID is a copy of TXN-000121,Rohan Kalsotra,2026-09-19
+TXN-000269,set_amount,2500,Amount supplied by reviewer,Rohan Kalsotra,2026-09-19

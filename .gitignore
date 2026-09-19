@@ -1,0 +1,19 @@
+# Python environment and caches
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets: NEVER commit these
+.env
+
+# macOS clutter
+.DS_Store
+
+# Real data files stay out of git...
+data/*.xlsx
+data/*.csv
+!data/.gitkeep
+# ...but our invented (synthetic) sample files are safe to share
+!data/sample_*.xlsx
+!data/sample_*.csv

@@ -1,17 +1,31 @@
 # Agentic Rhythm of Business (RoB) & OPEX Controller
 
-A small multi-agent system for preparing a quarterly operating-expense (OPEX) review, built with the
+A small system of AI agents and deterministic code for preparing a quarterly operating-expense (OPEX) review, built with the
 [Claude Agent SDK](https://docs.claude.com). It reads budget and spend data, flags variances, drafts a
 pre-read for senior leaders and builds a timed meeting agenda.
 
-**The one rule the whole design follows: AI writes, code calculates.** No AI model ever does arithmetic,
-sees a raw spreadsheet, or is trusted to remember something that must always happen. Everything that must
-be right is done by ordinary, tested Python. The models are allowed to write a few short pieces of text,
-and every piece is checked before it is used.
+**The design rule: AI writes, code calculates.** No AI model is ever asked to do arithmetic, and none is
+given a raw spreadsheet. Every figure is calculated and formatted by ordinary, tested Python, and any number
+an AI model writes is checked against that source. Where a document must contain something (a caveat, a
+flagged line), code writes it instead of trusting a model to remember it.
 
-> **About this project.** This is a personal learning and portfolio project, built by Rohan Kalsotra with no
-> prior professional coding background. It is a generalized rebuild of the kind of budget-review work done in
-> large organizations. **All data in this repository is synthetic** (invented names, vendors, POs and numbers).
+*Terms: RoB = "Rhythm of Business", the recurring cadence of budget reviews and leadership meetings;
+QBR = quarterly business review; SLT = senior leadership team; OPEX = operating expense.*
+
+**At a glance**
+
+- Three AI-driven components (a request router, a Variance Q&A agent and a Comms drafter) wrapped around a
+  deterministic calculator
+- 267 tests that run offline with no API key, and the whole thing was checked from a clean clone
+- Cost with the low-cost Haiku model: about 0.3 cents for an agenda-only request, about 6 cents for a full run
+  with an AI-drafted pre-read
+
+> **About this project.** A personal learning and portfolio project by Rohan Kalsotra, a business operations
+> consultant with no prior professional coding background. I supplied the business rules (how duplicates and
+> PO extensions work, the flag thresholds, the K/M/B display, the reviewer-decision workflow) and reviewed
+> and ran every piece; the code was written with Claude acting as a pair-programming tutor, one small piece at
+> a time, with tests for each. It is a generalized rebuild of the kind of budget-review work done in large
+> organizations. **All data in this repository is synthetic** (invented names, vendors, POs and numbers).
 > It is not production software.
 
 ---
@@ -19,9 +33,9 @@ and every piece is checked before it is used.
 ## The problem
 
 Before every quarterly business review, someone reconciles budgets against actual spend, flags variances,
-chases down data problems, writes a briefing and builds an agenda. It takes days, it is repetitive, and the
+chases down data problems, writes a briefing and builds an agenda. It can take days, it is repetitive, and the
 risky part is not the writing. It is a wrong number reaching a senior leader. So the question this project
-asks is: **how do you use AI for the writing without ever letting it touch the numbers?**
+asks is: **how do you use AI for the writing without letting it calculate or alter the numbers?**
 
 ## How it works
 
@@ -38,12 +52,20 @@ flowchart TD
     PC --> L[("run_log.json<br/>audit trail")]
 ```
 
+The Variance Agent (a question-and-answer assistant over the same calculator) is a separate entry point, not a
+step in this pipeline. The pipeline's `build_report` step calls the same deterministic code directly.
+
+**Design choice: a workflow with AI steps, not a free-roaming agent.** The router can only choose from three
+approved steps, the Comms Agent has no tools at all, and the one component that picks its own tool calls (the
+Variance Agent) has two read-only tools. For finance work, a predictable path was worth more to me than
+flexibility.
+
 | Part | What it does | AI involved? |
 |---|---|---|
 | **Data engine** (`variance_engine.py`) | Reads a Budget sheet and a Transactions sheet, checks the data (duplicates, missing amounts, missing IDs), applies a separate file of reviewer decisions with an audit trail | No |
 | **Variance math** (`variance_math.py`) | Calculates budget vs actual for the quarter and year to date at three levels (total, cost center, cost center + category) and flags OVER / UNDER lines | No |
 | **Text cards** (`variance_tools.py`) | Turns every number into finished text ("+$61.7K", "+45.7%") before any model sees it | No |
-| **Variance Agent** (`variance_agent.py`) | Claude answers questions about the results by calling two tools that return the text cards | Yes, checked by `verifier.py` |
+| **Variance Agent** (`variance_agent.py`) | Claude answers questions about the results by calling two tools that return the text cards | Yes; `verifier.py` checks every answer and shows the verdict, but does not block it |
 | **Hand-off file** (`handoff.py`) | One JSON file of finished text. It is the only thing the Comms side may read | No |
 | **Pre-read** (`preread.py`) | Builds the leadership pre-read: numbers, flagged lines, data caveats, follow-ups | No, except two labelled slots |
 | **Comms Agent** (`comms_agent.py`, `comms_checks.py`) | Claude drafts only a headline and discussion points; plain-Python checks accept or discard the draft | Yes, gated |
@@ -53,24 +75,33 @@ flowchart TD
 ## The trust boundary
 
 1. **Code calculates, models narrate.** Every figure comes from pandas code. Even the "$1.2K / $4.5M"
-   formatting is done in code, so a model can only copy text, never convert or round.
+   formatting is done in code, so a model can only copy text, never convert or round. Models are instructed
+   never to calculate, and a plain-Python check flags any number that is not in the source.
 2. **Models see only what they need.** The router sees the request and nothing else. The Comms Agent sees only
    the hand-off file, never the workbook, and its source files are forbidden (by a test) from importing the
    calculator or pandas.
-3. **Everything that must always appear is written by code.** The numbers, flagged lines, data-quality notes,
-   caveats and follow-ups are generated by plain Python. A model cannot forget or reword them.
-4. **Every AI-written part is checked before use.** A draft that fails is shown its problems once. If it fails
-   again it is thrown away and the document keeps a clearly marked placeholder.
+3. **Everything that must always appear is written by code.** In the pre-read and the agenda, the numbers,
+   flagged lines, data-quality notes, caveats and follow-ups are generated by plain Python, so a model cannot
+   forget or reword them. (The Variance Agent's free-form answers are the exception; see the limitations.)
+4. **AI drafts for the pre-read are checked before use.** A draft that fails is shown its problems once. If it
+   fails again it is thrown away and the document keeps a clearly marked placeholder. The Variance Agent's
+   answers are checked after the fact and the verdict is shown, but they are not blocked.
 5. **Claude suggests, code decides.** The router can only pick from three approved steps. Anything else is
    dropped, and the order is fixed, so a cleverly worded request cannot add an action.
 6. **A human reviews.** Every generated document ends with a "human has reviewed this" checkbox, and every
    run writes an audit log.
+7. **Least privilege.** Every model call runs with no built-in tools (no file, web or shell access), a turn
+   limit and a dollar cap. The router and the Comms Agent get no tools at all; the Variance Agent gets two
+   read-only ones.
+
+The boundary is enforced by code structure and tests inside one program (what each function is handed, and
+which modules it may import), not by an operating-system sandbox.
 
 ### What the checks catch
 
 | Check | Catches | Cannot catch |
 |---|---|---|
-| **Number verifier** (`verifier.py`) | Any number or ID in an AI answer that is not in the source text; flipped +/- signs; numbers a model calculated itself | Wrong *meaning* (right numbers, wrong team), numbers written as words |
+| **Number verifier** (`verifier.py`) | Any number or ID in an AI answer that is not in the source text; flipped +/- signs; numbers a model calculated itself | Wrong *meaning* (right numbers, wrong team), numbers written as words, a wrong number that happens to equal another number already in the source |
 | **Banned wording** (`comms_checks.py`) | Judgment words ("significantly") and invented causes ("because", "postponed") | Subtle wording problems |
 | **Completeness check** | A flagged line or a known data caveat left out of the discussion points | Whether the point is well written |
 | **Control total** | Any transaction lost between the raw data and the report | Errors in the source data itself |
@@ -104,7 +135,7 @@ pip install -r requirements.txt
 # 2. (optional) regenerate the synthetic sample workbook; a copy is already in data/
 python scripts/make_sample_data.py
 
-# 3. run the tests (about 270, all offline)
+# 3. run the tests (more than 260, all offline)
 python -m pytest -q
 
 # 4. run the parts that use no AI
@@ -148,8 +179,9 @@ Times are shared out by simple whole-number rules, and a test checks that they a
 
 ## What went wrong along the way (and what changed)
 
-The most useful part of this project was watching the AI make mistakes. Every fix below is now a permanent
-test, so a regression is caught without spending any API money.
+The most useful part of this project was watching the AI make mistakes. Each fix below is now covered by an
+automated test, so a regression is caught without spending any API money. (The judgment-word and omission
+checks are enforced on the Comms Agent; the Variance Agent only has prompt rules for them.)
 
 | What the model did | The fix | Lesson |
 |---|---|---|
@@ -169,8 +201,11 @@ test, so a regression is caught without spending any API money.
   Agent's drafts get the fuller set of checks.
 - **Wording quality is not checked.** Drafts can be clumsy, which is one reason a human reviews them.
 - **Numbers written as words** ("three duplicates") are not verified.
-- **A few live runs, not a benchmark.** The behavior above comes from real runs, but it is not a statistical
-  evaluation, and models can change over time.
+- **Small sample of live runs.** Roughly seven Variance Agent runs and a handful of Comms Agent and
+  Orchestrator runs: enough to find failure modes, not to measure a failure rate. Models can also change
+  over time.
+- **The Variance Agent is not wired into the Orchestrator.** It is a standalone question-and-answer tool.
+- **The trust boundary is structural, not a sandbox.** Everything runs in one Python program on one machine.
 - **The agenda ranks by dollar swing only.** It does not weigh importance or who is available.
 - **Owners and due dates are never invented.** Follow-ups say "to be assigned" on purpose.
 
@@ -194,20 +229,21 @@ agents/
 hello_claude.py              a tiny test that the API key and connection work
 scripts/make_sample_data.py   builds the synthetic workbook
 data/                         sample workbook + sample reviewer decisions
-tests/                        about 270 tests, including the trust-boundary tests
+tests/                        more than 260 tests, including the trust-boundary tests
 outputs/                      generated files (git-ignored)
 ```
 
 ## Tests
 
-About 270 tests, all of which run offline. The AI-facing loops (the Comms Agent's draft-check-retry cycle and
-the Orchestrator) are tested with a fake model, so they cost nothing to run. Some tests read the source files
-and fail if the Comms side ever imports the calculator or pandas, or if the router is ever handed anything
-except the request. Several checks were also verified by breaking the code on purpose and confirming the tests
-failed.
+More than 260 tests, all of which run offline. The AI-facing loops (the Comms Agent's draft-check-retry cycle
+and the Orchestrator) are tested with a fake model, so they cost nothing to run. Some tests read the source
+files and fail if the Comms side ever imports the calculator or pandas; others check behavior, for example
+that the router is handed only the request text. Several checks were also verified by breaking the code on
+purpose and confirming the tests failed.
 
 ## Roadmap
 
+- Route free-form questions from the Orchestrator to the Variance Agent
 - Trim the prompt sent to the Comms Agent to lower its cost
 - Extend the completeness and wording checks to the Variance Agent's free-form answers
 - Try a larger model for the polished drafts and compare

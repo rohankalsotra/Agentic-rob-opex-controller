@@ -126,8 +126,8 @@ You need Python 3.11 or newer (developed on 3.13). Steps 1 to 4 need no API key 
 
 ```bash
 # 1. get the code and set up a private Python environment
-git clone <your-repo-url>
-cd <repo-folder>
+git clone https://github.com/rohankalsotra/agentic-rob-opex-controller.git
+cd agentic-rob-opex-controller
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
